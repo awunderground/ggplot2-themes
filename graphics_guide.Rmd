@@ -1,0 +1,683 @@
+---
+output:
+  html_document:
+    self_contained: TRUE
+    code_folding: hide
+    toc: TRUE
+    toc_float: TRUE
+    pandoc_args: [ 
+      "--tab-stop=2" 
+    ] 
+---
+
+```{r markdown setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+```{r setup}
+library(datasets)
+library(tidyverse)
+
+options(scipen = 999)
+```
+
+## Univariate
+
+There are a number of ways to explore the distribution of univariate data in R. Some methods, like strip charts, show all data points. Other methods, like the box and whisker plot, show selected data points that communicate a key values like the median and 25th percentile. Finally, some methods don't show any of the underlying data but calculate density estimates. Each method has advantages and disadvantages, so it is worthwhile to understand the different forms. For more information, read [40 years of boxplots](http://vita.had.co.nz/papers/boxplots.pdf) by Hadley Wickham and Lisa Stryjewski.
+
+### Strip Chart
+
+Strip charts, the simplest univariate plot, show the distribution of values along one axis. Strip charts work best with variables that have plenty of variation. If not, the points tend to cluster on top of each other. Even if the variable has plenty of variation, it is often important to add transparency to the points with `alpha = ` so overlapping values are visible. 
+
+```{r stripchart, fig.height=1.5}
+msleep %>%
+  ggplot(aes(x = sleep_total, y = factor(1))) +
+  geom_point(alpha = 0.2, size = 5) +
+  labs(y = NULL) +
+  scale_y_discrete(labels = NULL) +
+  labs(title = "Total Sleep Time of Different Mammals",
+       caption = "Data from V. M. Savage and G. B. West",
+       x = "Total sleep time (hours)",
+       y = NULL) +
+  theme(axis.ticks.y = element_blank())
+
+```
+
+### Strip Chart with Highlighting
+
+Because strip charts show all values, they are useful for showing where selected points lie in the distribution of a variable. The clearest way to do this is by adding `geom_point()` twice with `filter()` in the data argument. This way, the highlighted values show up on top of the unhighlighted values. 
+
+```{r stripchart with highlighting, fig.height=1.5}
+ggplot() +
+  geom_point(data = filter(msleep, name != "Red fox"), 
+                    aes(x = sleep_total, 
+                        y = factor(1)),
+             alpha = 0.2, 
+             size = 5) +
+  geom_point(data = filter(msleep, name == "Red fox"),
+             aes(x = sleep_total, 
+                 y = factor(1), 
+                 color = name),
+             alpha = 0.8,
+             size = 5) +
+  labs(y = NULL) +
+  scale_y_discrete(labels = NULL) +
+  labs(title = "Total Sleep Time of Different Mammals",
+       caption = "Data from V. M. Savage and G. B. West",
+       x = "Total sleep time (hours)",
+       y = NULL,
+       legend) +
+  guides(color = guide_legend(title = NULL)) +
+  theme(axis.ticks.y = element_blank())
+```
+
+### Subsetted Strip Chart 
+
+```{r subsetted stripchart, fig.height=3}
+library(forcats)
+
+msleep %>%
+  filter(!is.na(vore)) %>%
+  mutate(vore = fct_recode(vore, 
+                            "Insectivore" = "insecti",
+                            "Omnivore" = "omni", 
+                            "Herbivore" = "herbi", 
+                            "Carnivore" = "carni"
+                            )) %>%
+  ggplot(aes(x = sleep_total, y = vore)) +
+  geom_point(alpha = 0.2, size = 5) +
+  labs(title = "Total Sleep Time of Different Mammals by Diet",
+       caption = "Data from V. M. Savage and G. B. West",
+       x = "Total sleep time (hours)",
+       y = NULL) +
+  theme(axis.ticks.y = element_blank())
+```
+
+### Bean Plot
+
+Individual outliers and important summary values are not visible in violin plots. Bean plots, [created by Peter Kampstra in 2008](https://www.jstatsoft.org/article/view/v028c01), are violin plots with data shown as small lines in a one-dimensional scatter plot and a larger line for the mean. 
+
+```{r beanplot}
+msleep %>%
+  filter(!is.na(vore)) %>%
+  mutate(vore = fct_recode(vore, 
+                            "Insectivore" = "insecti",
+                            "Omnivore" = "omni", 
+                            "Herbivore" = "herbi", 
+                            "Carnivore" = "carni"
+                            )) %>%
+  ggplot(aes(x = vore, y = sleep_total, fill = vore)) +
+  stat_summary(fun.y= "mean",
+              colour = "black", 
+              size = 30,
+              shape = 95,
+              geom = "point") +
+  geom_violin() +
+  geom_jitter(width = 0,
+              height = 0.05,
+              alpha = 0.2,
+              shape = "-",
+              size = 10) +
+    labs(title = "Total Sleep Time of Different Mammals by Diet",
+       caption = "Data from V. M. Savage and G. B. West",
+       x = NULL,
+       y = "Total sleep time (hours)") +
+  theme(legend.position = "none")
+```
+
+### Smoothed kernel density estimates
+
+Continuous variables with smooth distributions are sometimes better represented with smoothed kernel density estimates than histograms. `geom_density()` computes and plots a kernel density estimate.
+
+```{r kernel density plot}
+diamonds %>%
+  ggplot(aes(carat)) +
+  geom_density() +
+  labs(title = "Distribution of Carats",
+       x = "Carat",
+       y = "Density")
+```
+
+```{r kernel density plot filled}
+diamonds %>%
+  mutate(cost = ifelse(price > 5500, "More than $5,500 +", "$0 to $5,500")) %>%
+  ggplot(aes(carat, fill = cost)) +
+  geom_density(alpha = 0.25) +
+  labs(title = "Distribution of Carats",
+       x = "Carat",
+       y = "Density")
+```
+
+## Annotation
+
+Several functions can be used to annotate, label, and highlight different parts of plots. `geom_text()` and `geom_text_repel()` both require data frames. `annotate()`, which has several different uses, does not work with data frames. 
+
+### geom_text()
+
+`geom_text()` turns text variables in data sets into geometric objects. This is useful for labeling data in plots. Both functions need `x` values and `y` values to determine placement on the coordinate plane, and a text vector of labels. 
+
+This can be used to label `geom_bar()`. 
+
+```{r bar-geom_text}
+diamonds %>%
+  group_by(cut) %>%
+  summarize(price = mean(price)) %>%
+  ggplot(aes(cut, price)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = scales::dollar(price)), vjust = -1) +
+  scale_y_continuous(labels = scales::dollar,
+                     limits = c(0, 5000)) +
+  labs(title = "Average Diamond Price by Diamond Cut",
+       x = "Cut",
+       y = "Price")
+```
+
+It can also be used to label points in a scatter plot. 
+
+It's rarely useful to label every point in a scatter plot. Use `filter()` to create a second data set that is subsetted and pass it into the labelling function. 
+
+```{r scatterplot-geom_text}
+labels <- mtcars %>%
+	rownames_to_column("model") %>%
+	filter(model %in% c("Toyota Corolla", "Merc 240D", "Datsun 710"))
+
+mtcars %>%
+	ggplot(mapping = aes(x = wt, y = mpg)) +
+		geom_point() +
+		geom_text(data = labels, mapping = aes(x = wt, y = mpg, label = model), nudge_x = 0.38) +
+	  labs(title = "Fuel Efficiency Declines as Weight Increases",
+       caption = "Urban Institute",
+       x = "Weight (Tons)",
+       y = "Miles Per Gallon")
+```
+
+Text too often overlaps with other text or geoms when using `geom_text()`. `library(ggrepel)` is a `library(ggplot2)` add-on that automatically positions text so it doesn't overlap with geoms or other text.
+
+To add this functionality, install and load `library(ggrepel)` and then use `geom_text_repel()` with the same syntax as `geom_text()` and `geom_label()`. 
+
+### geom_text_repel()
+
+```{r scatterplot-geom_text_repel}
+library(ggrepel)
+
+labels <- mtcars %>%
+	rownames_to_column("model") %>%
+	top_n(5, mpg)
+
+mtcars %>%
+	ggplot(mapping = aes(x = wt, y = mpg)) +
+		geom_point() +
+		geom_text_repel(data = labels, 
+		                mapping = aes(label = model), 
+		                nudge_x = 0.38) +
+	  labs(title = "Fuel Efficiency Declines as Weight Increases",
+       caption = "Urban Institute",
+       x = "Weight (Tons)",
+       y = "Miles Per Gallon")
+```
+
+### annotate()
+
+`annotate()` doesn't use data frames. Instead, it takes values for `x =` and `y =`. It can add text, rectangles, segments, and pointrange. 
+
+#### text
+
+```{r annotate point}
+msleep %>%
+  filter(bodywt < 1000) %>%
+  ggplot(aes(bodywt, sleep_total)) +
+  geom_point() +
+  annotate("text", x = 500, y = 12, label = "These data suggest that heavy \n animals sleep less than light animals") +
+  labs(title = "The relationship between mammal weight and sleep",
+       x = "Body weight (pounds)",
+       y = "Sleep time (hours)")
+```
+
+#### rect
+
+```{r annotate rect}
+library(AmesHousing)
+
+ames <- make_ames()
+
+ames %>%
+  mutate(square_footage = Total_Bsmt_SF - Bsmt_Unf_SF + First_Flr_SF + Second_Flr_SF) %>%
+  mutate(Sale_Price = Sale_Price / 1000) %>%  
+  ggplot(aes(square_footage, Sale_Price)) +
+  geom_point(alpha = 0.2) +
+  scale_y_continuous(expand = c(0, 0),
+                     limits = c(0, 800), 
+                     labels = scales::dollar) +
+  scale_x_continuous(labels = scales::comma,
+                     breaks = c(0, 5000, 10000)) +  
+  labs(title = "Home Sales Prices in Ames, Iowa", 
+       x = "Square footage", 
+       y = "Sale price (thousands)") +
+  annotate("rect", xmin = 6800, xmax = 11500, ymin = 145, ymax = 210, alpha = 0.1) +
+  annotate("text", x = 8750, y = 230, label = "Unfinished homes")
+```
+
+
+## Combine Plots
+
+`facet_wrap()` and `facte_grid()` can be used to combine multiple subsetted plots of the same class with the same data. But sometimes it is useful to combine plots of different classes or even plots with different data into one object. This can be accomplished with `library(gridExtra)`. 
+
+First, create grid graphical objects, also known as "grobs", using the assignment operator. Second, use `grid.arrange` to combine the grobs into one object. 
+
+```{r}
+library(gridExtra)
+library(AmesHousing)
+
+ames <- make_ames() %>%
+  mutate(square_footage = Total_Bsmt_SF - Bsmt_Unf_SF + First_Flr_SF + Second_Flr_SF)
+
+scatter_plot <- ames %>%
+  ggplot(aes(square_footage, Sale_Price)) +
+  geom_point() +
+  labs(x = NULL) +
+  scale_x_continuous(labels = NULL) +
+  theme()
+
+density_sf <- ames %>%
+  ggplot(aes(square_footage)) +
+  geom_density()
+
+density_price <- ames %>%
+  ggplot(aes(Sale_Price)) +
+  geom_density() +
+  coord_flip() +
+  labs(x = NULL) +
+  scale_x_continuous(labels = NULL)
+ 
+grid.arrange(scatter_plot, density_price, density_sf, 
+             ncol = 2,
+             heights = c(4, 1),
+             widths = c(4, 1))
+```
+
+todo(aaron): add Jon Schwabish code
+
+```{r}
+
+```
+
+## Saving plots
+
+ggplot2 plots can be exported with `ggsave()`. The function can be used in two ways. If `plot =` isn't specified in the function call, then `ggsave()` automatically saves the plot that was last displayed in the Viewer window. Second, if `plot =` is specified, then `ggsave()` saves the specified plot. `ggsave()` guesses the type of graphics device to use in export (.png, .pdf, .svg, etc.) from the file extension in the filename. 
+
+```{r ggsave, eval = FALSE}
+mtcars %>%
+  ggplot(aes(x = wt, y = mpg)) +
+  geom_point()
+
+ggsave(filename = "cars.png")
+
+plot2 <- mtcars %>%
+  ggplot(aes(x = wt, y = mpg)) +
+  geom_point()
+
+ggsave(filename = "cars.png", plot = plot2)
+```
+
+Exported plots rarely look identical to the plots that show up in the Viewer window in RStudio. That's because the overall size and aspect ratio of the Viewer is often different than the defaults for `ggsave()`. Specific sizes, aspect ratios, and resolutions can be controlled with arguments in `ggsave()`. RStudio has a useful [cheatsheet](https://www.rstudio.com/resources/cheatsheets/) called "How Big is Your Graph?" that should help with choosing the best size, aspect ratio, and resolution. 
+
+In general, .svg files appear crisper than .png or .pdf files. However, .png and .pdf are more stable when put on the Internet. 
+
+## Bar Plots
+
+### Ordered bar plot
+
+```{r order bar plot}
+mtcars %>%
+  rownames_to_column("model") %>%
+  top_n(10) %>%
+  mutate(model = fct_reorder(model, mpg)) %>%
+  ggplot(aes(model, mpg)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(x = model, y = 0.5, label = model), angle = 90, hjust = 0) +
+  scale_x_discrete(labels = NULL) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 25)) +
+  labs(title = "Gas Guzzlers",
+       subtitle = "Ten Worst MPGs",
+       caption = "1974 Motor Trend US Magazine",
+       x = NULL,
+       y = "Miles Per Gallon") +
+  theme(axis.ticks = element_blank())
+```
+
+### Faceted bar plots
+
+```{r}
+library(purrr)
+
+file <- c("data/lewis.csv", "data/tillman.csv", "data/alie-cox.csv", "data/doughty.csv", "data/williams.csv", "data/hamdy.csv", "data/brooks.csv", "data/burgess.csv", "data/jenkins.csv", "data/crowfield.csv", "data/fraser.csv", "data/burston.csv")
+
+player <- c("Lewis", "Tillman", "Alie-Cox", "Doughty", "Williams", "Hamdy", "Brooks", "Burgess", "Jenkins", "Crowfield", "Fraser", "Burston")
+
+readr <- function(csv, name) {
+
+  read_csv(csv) %>%
+    filter(!is.na(Rk)) %>%
+    mutate(player = name)
+  
+}
+
+vcu <- map2(file, player, readr) %>%
+  reduce(bind_rows)
+
+season_average <- vcu %>%
+  group_by(player) %>%
+  summarize(PPG = mean(PTS)) %>%
+  arrange(desc(PPG))
+
+dates <- tibble(Date = unique(vcu$Date))
+
+#full_join(dates, vcu) %>%
+#  group_by(player) %>%
+#  summarize(n())
+
+vcu %>%
+  mutate(player = factor(player, levels = season_average$player)) %>%
+  ggplot(aes(x = Date, y = PTS, group = player)) +
+  geom_bar(stat = "identity", fill = "#FFB300", color = "#FFFFFF") +
+  facet_wrap(~player) +
+  theme(panel.background = element_blank(),
+        strip.background = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank())
+```
+
+## Slope Chart
+
+### Faceted slope chart
+
+http://www.pewresearch.org/fact-tank/2017/10/11/the-share-of-americans-living-without-a-partner-has-increased-especially-among-young-adults/?utm_content=buffer3617d&utm_medium=social&utm_source=twitter.com&utm_campaign=buffer
+```{r}
+library(ggrepel)
+
+basketball <- tibble(team = c("George Mason", "George Mason", "Old Dominion", "Old Dominion", "VCU", "VCU"),
+      year = c(2011, 2012, 2011, 2012, 2011, 2012),
+      wins = c(27, 24, 27, 22, 28, 29)
+      )
+
+basketball %>%
+  ggplot(aes(year, wins)) +
+    geom_line() +
+    geom_point() +
+    geom_area(alpha = 0.2) +
+    geom_text(aes(year, wins, label = wins), vjust = -0.5) +
+    scale_x_continuous(breaks = c(2011, 2012)) +
+    scale_y_continuous(limits = c(0, 30)) +
+    facet_wrap(~team) + 
+    theme(axis.ticks.x = element_blank(),
+          axis.title.x = element_blank(),
+          axis.ticks.y = element_blank(),
+          axis.title.y = element_blank(), 
+          axis.text.y = element_blank(),
+          plot.background = element_blank(),
+          panel.background = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          axis.line = element_blank(),
+          strip.background = element_blank(),
+          plot.margin = margin(1, 2, 1, 2),
+          panel.spacing = unit(12L, "pt"))
+```
+
+## Area Plot
+
+### Faceted cumulative mean area plots
+
+```{r}
+
+# cummean
+
+# todo(aaron): add missing values for dates
+# todo(aaron): season average by game
+
+
+#list.files(pattern = ".csv") %>%
+#  map_df(read_csv)
+
+# todo(aaron): calculate total points per state
+# todo(aaron): add zeroes
+# todo(aaron): set zeroes to NAs so they don't show up
+
+vcu %>%
+  group_by(player) %>%
+  mutate(PPG = cummean(PTS)) %>%
+  ungroup() %>%
+  mutate(player = factor(player, levels = season_average$player)) %>%
+  ggplot(aes(x = Date, y = PPG, group = player)) +
+  geom_line() +
+  geom_area(fill = "#FFB300") +
+  facet_wrap(~player) +
+  labs(title = "Cumulative PPG",
+       subtitle = "2017 VCU Rams",
+       caption = "@awunderground") +
+  theme(panel.background = element_blank(),
+        strip.background = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank())
+```
+
+https://drsimonj.svbtle.com/plotting-background-data-for-groups-with-ggplot2
+
+
+### Faceted rolling average plot
+
+https://drsimonj.svbtle.com/plotting-background-data-for-groups-with-ggplot2
+
+```{r hot-hand}
+season_average <- vcu %>%
+  group_by(player) %>%
+  summarize(PPG = mean(PTS)) %>%
+  arrange(desc(PPG))
+
+#dates <- tibble(Date = unique(vcu$Date))
+
+vcu <- full_join(vcu, season_average)
+
+library(lubridate)
+
+team <- vcu %>%
+  group_by(Date) %>%
+  summarize(PTS = sum(PTS)) %>%
+  ungroup() %>%
+  mutate(team = "team")
+
+vcu %>%
+  mutate(player = factor(player, levels = season_average$player),
+         y = 43, 
+         x = "2017-01-22") %>%  
+  ggplot(aes(Date, PTS)) +
+  geom_area(data = team, aes(group = team), fill = "grey", alpha = 0.5) +
+  geom_area(aes(group = player), fill = "#FFB300") +
+  geom_text(aes(x, y, label = paste(as.character(round(PPG, 1)), " PPG")), size = 3) +
+  facet_wrap(~player) +
+  labs(title = "2017 VCU Scoring by Game",
+       subtitle = "Team in Grey, Players in Gold",
+       caption = "@awunderground",
+       x = NULL,
+       y = NULL) +
+  guides(fill = FALSE) +
+  theme(panel.background = element_blank(),
+        strip.background = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank())
+
+ggsave("player-ppg.png", width = 6, height = 5)
+```
+
+### Highlighted and Faceted Spaghetti Plots
+
+https://drsimonj.svbtle.com/plotting-background-data-for-groups-with-ggplot2
+
+```{r spaghetti}
+season_average <- vcu %>%
+  group_by(player) %>%
+  summarize(PPG = mean(PTS)) %>%
+  arrange(desc(PPG))
+
+team <- vcu %>%
+  mutate(team = "team",
+         player2 = player) %>%
+  select(-player)
+
+vcu %>%
+  mutate(player = factor(player, levels = season_average$player)) %>%
+  ggplot(aes(Date, PTS)) +
+  geom_line(data = team, aes(group = player2), fill = "grey", alpha = 0.15) +
+  geom_line(aes(group = player), color = "#FFB300", size = 1) +
+  facet_wrap(~player)  +
+  labs(title = "2017 VCU Scoring by Game",
+       subtitle = "Team in Grey, Players in Gold",
+       caption = "@awunderground",
+       x = NULL,
+       y = NULL) +
+  theme(panel.background = element_blank(),
+        strip.background = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank())
+
+ggsave("spaghetti-ppg.png", width = 6, height = 5)
+```
+
+### Dumbbell Plot
+
+```{r dumbbell plot}
+modified_mtcars <- mtcars %>%
+  rownames_to_column("model") %>%
+  mutate(year = 1975,
+         adjustment = rnorm(n = 1, mean = 3, sd = 10),
+         mpg = mpg + adjustment)
+
+modified_mtcars <- mtcars %>%
+  rownames_to_column("model") %>%
+  mutate(year = 1974) %>%
+  bind_rows(modified_mtcars) %>%
+  select(model, year, mpg) %>%
+  mutate(year = factor(year))
+
+difference <- modified_mtcars %>%
+  spread(year, mpg) %>%
+  arrange(`1974`) %>%
+  mutate(model = factor(model, levels = unique(.$model)))
+
+modified_mtcars %>%
+  arrange(mpg) %>%
+  mutate(model = factor(model, levels = unique(.$model))) %>%
+  ggplot(aes(mpg, model, color = year)) +
+    geom_segment(data = difference, aes(x = `1974`, xend = `1975`, y = model, yend = model), 
+                 color = "black") + 
+    geom_point() +  
+    scale_x_continuous(expand = c(0, 0), limits = c(0, max(modified_mtcars$mpg) * 1.1)) +
+    labs(title = "Miles Per Gallon of Popular Cars",
+         subtitle = "1974 Motor Trend US magazine",
+         x = NULL,
+         y = "Miles Per Gallon",
+         caption = "Urban Institute") +
+    theme(axis.text.y = element_text(size = 8))
+```
+
+### Diverging dot plot
+```{r diverging dot plot}
+modified_mtcars <- mtcars %>%
+  rownames_to_column("model") %>%
+  mutate(mean_mpg = mean(mpg),
+         mpg_difference = mpg - mean_mpg) %>%
+  arrange(mpg_difference) %>%
+  mutate(model = factor(model, levels = .$model),
+         label = ifelse(mpg_difference >= 0, "Above Average", "Below Average"))
+  
+modified_mtcars %>%
+  ggplot(aes(mpg_difference, model, color = label)) +
+  geom_point()
+```
+
+### Diverging lollipop plot
+
+https://i0.wp.com/rud.is/b/wp-content/uploads/2016/04/RStudio.png?ssl=1
+
+```{r diverging lollipop plot}
+modified_mtcars <- mtcars %>%
+  rownames_to_column("model") %>%
+  mutate(mean_mpg = mean(mpg),
+         mpg_difference = mpg - mean_mpg) %>%
+  arrange(mpg_difference) %>%
+  mutate(model = factor(model, levels = .$model),
+         label = ifelse(mpg_difference >= 0, "Above Average", "Below Average"))
+  
+modified_mtcars %>%
+  ggplot(aes(mpg_difference, model, color = label)) +
+    geom_segment(aes(x = 0, xend = mpg_difference, y = model, yend = model), color = "black") +
+    geom_point()
+```
+
+### Diverging bar plot
+
+```{r diverging bar plot}
+modified_mtcars <- mtcars %>%
+  rownames_to_column("model") %>%
+  mutate(mean_mpg = mean(mpg),
+         mpg_difference = mpg - mean_mpg) %>%
+  arrange(mpg_difference) %>%
+  mutate(model = factor(model, levels = .$model),
+         label = ifelse(mpg_difference >= 0, "Above Average", "Below Average"))
+  
+modified_mtcars %>%
+  ggplot(aes(model, mpg_difference, fill = label)) +
+    geom_bar(stat = "identity") +
+    coord_flip()
+```
+
+### Calendar heat map
+
+http://margintale.blogspot.in/2012/04/ggplot2-time-series-heatmaps.html
+
+```{r calendar heatmap, eval = FALSE}
+library(scales)
+library(zoo)
+
+calendar <- tibble(
+  date = as.Date(as.Date("2015-01-01"):as.Date("2017-12-31"), origin="1970-01-01"),
+  dummy = 1
+) %>%
+  mutate(year = as.numeric(as.POSIXlt(date)$year+1900),
+         month = factor(as.yearmon(date)),
+         weekday = factor(as.POSIXlt(date)$wday, levels=rev(0:6),labels=rev(c("Mon","Tue","Wed","Thu","Fri","Sat","Sun")),ordered=TRUE),
+         week = as.numeric(format(date,"%W")))%>%
+  group_by(month) %>%
+  mutate(monthweek = 1 + week-min(week))
+
+# Now for the plot
+ggplot(calendar, aes(monthweek, weekday, fill = dummy)) + 
+  geom_tile(colour = "white") + 
+  facet_grid(year ~ month) + 
+  scale_fill_gradient(low = "red", high = "yellow")
+
+#df <- read.csv("https://raw.githubusercontent.com/selva86/datasets/master/yahoo.csv")
+#df$date <- as.Date(df$date)  # format date
+#df <- df[df$year >= 2012, ]  # filter reqd years
+
+# Create Month Week
+#df$yearmonth <- as.yearmon(df$date)
+#df$yearmonthf <- factor(df$yearmonth)
+df <- ddply(df, .(yearmonthf), transform, monthweek=1+week-min(week))  # compute week number of month
+df <- df[, c("year", "yearmonthf", "monthf", "week", "monthweek", "weekdayf", "VIX.Close")]
+
+
+
+# Plot
+ggplot(df, aes(monthweek, weekdayf, fill = VIX.Close)) + 
+  geom_tile(colour = "white") + 
+  facet_grid(year~monthf) + 
+  scale_fill_gradient(low="red", high="green") +
+  labs(x="Week of Month",
+       y="",
+       title = "Time-Series Calendar Heatmap", 
+       subtitle="Yahoo Closing Price", 
+       fill="Close")
+```
