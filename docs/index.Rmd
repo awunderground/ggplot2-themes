@@ -387,7 +387,7 @@ vcu %>%
         axis.ticks = element_blank())
 ```
 
-### Step plot
+## Step plot
 
 ```{r step-plot}
 season_average <- vcu %>%
@@ -463,6 +463,49 @@ basketball %>%
 ```
 
 ## Area Plot
+
+### Simple area plot
+
+```{r cbo}
+library(tidyverse)
+library(readxl)
+
+link <- "https://www.cbo.gov/system/files/115th-congress-2017-2018/reports/53651-dataunderlyingfigures.xlsx"
+
+if (!file.exists("../data/cbo.xlsx")) {
+  download.file(link, "../data/cbo.xlsx")
+}
+
+cbo <- read_excel("../data/cbo.xlsx", sheet = "Summary Figure 2", skip = 8) %>%
+  rename(year = X__1, debt_to_gdp = `History and CBO's Baseline Projection`) %>%
+  filter(row_number() < 89) %>%
+  mutate_all(as.numeric) %>%
+  mutate(data_type = ifelse(year < 2018, "historic", "projection"))
+
+cbo <- cbo %>%
+  filter(year == 2017) %>%
+  mutate(data_type = "projection") %>%
+  bind_rows(cbo)
+
+labels <- tribble(
+  ~x, ~y, ~label,
+  2013, 110, "Historic",
+  2021.5, 110, "Projected"
+  )
+
+ggplot() +
+  geom_area(data = cbo, aes(year, debt_to_gdp, fill = data_type), position = "identity") +
+  geom_segment(aes(x = 2017, xend = 2017, y = 0, yend = 110), linetype = 2, size = 0.5, alpha = 0.5) +
+  geom_text(data = labels, aes(x, y, label = label)) +
+  scale_x_continuous(breaks = seq(1940, 2030, 5)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 120)) +
+  scale_fill_manual(values = c("#1696d2", "#a2d4ec")) +
+  guides(fill = FALSE) +
+  labs(title = "Percentage of debt held by the public", 
+       subtitle = "Percentage of Gross Domestic Product",
+       x = "Year",
+       y = NULL)
+```
 
 ### Faceted cumulative mean area plots
 
@@ -581,7 +624,7 @@ vcu %>%
 ggsave("spaghetti-ppg.png", width = 6, height = 5)
 ```
 
-### Dumbbell Plot
+## Dumbbell Plot
 
 ```{r dumbbell plot}
 modified_mtcars <- mtcars %>%
@@ -618,7 +661,7 @@ modified_mtcars %>%
     theme(axis.text.y = element_text(size = 8))
 ```
 
-### Diverging dot plot
+## Diverging dot plot
 ```{r diverging dot plot}
 modified_mtcars <- mtcars %>%
   rownames_to_column("model") %>%
@@ -633,7 +676,7 @@ modified_mtcars %>%
   geom_point()
 ```
 
-### Diverging lollipop plot
+## Diverging lollipop plot
 
 https://i0.wp.com/rud.is/b/wp-content/uploads/2016/04/RStudio.png?ssl=1
 
@@ -652,7 +695,7 @@ modified_mtcars %>%
     geom_point()
 ```
 
-### Diverging bar plot
+## Diverging bar plot
 
 ```{r diverging bar plot}
 modified_mtcars <- mtcars %>%
@@ -669,7 +712,7 @@ modified_mtcars %>%
     coord_flip()
 ```
 
-### Calendar heat map
+## Calendar heat map
 
 http://margintale.blogspot.in/2012/04/ggplot2-time-series-heatmaps.html
 
@@ -729,11 +772,11 @@ ggplot(df, aes(monthweek, weekdayf, fill = VIX.Close)) +
 
 For example, this is necesary for creating Beveridge curves. The Beveridge curve, named for the economist William Beveridge, compares the unemployment rate with the job vacancy rate.  
 
-# seasonally-adjusted, quarterly vacancy rate
-# seasonally-adjusted, quarterly unemployment rate 
+### seasonally-adjusted, quarterly vacancy rate
+### seasonally-adjusted, quarterly unemployment rate 
 
 
-# pulled from FRED on April 11, 2018. 
+### pulled from FRED on April 11, 2018. 
 
 ```{r beveridge}
 library(tidyverse)
