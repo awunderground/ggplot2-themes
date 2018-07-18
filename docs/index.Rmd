@@ -1,13 +1,11 @@
 ---
 output:
   html_document:
-    self_contained: TRUE
     code_folding: hide
     toc: TRUE
     toc_float: TRUE
-    pandoc_args: [ 
-      "--tab-stop=2" 
-    ] 
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r markdown setup, include=FALSE}
@@ -364,7 +362,7 @@ readr <- function(csv, name) {
   
 }
 
-vcu <- map2(file, player, readr) %>%
+vcu <- map2(paste0("../", file), player, readr) %>%
   reduce(bind_rows)
 
 season_average <- vcu %>%
@@ -387,6 +385,44 @@ vcu %>%
         strip.background = element_blank(),
         axis.text.x = element_blank(),
         axis.ticks = element_blank())
+```
+
+### Step plot
+
+```{r step-plot}
+season_average <- vcu %>%
+  group_by(player) %>%
+  summarize(PPG = mean(PTS)) %>%
+  arrange(desc(PPG))
+
+team <- vcu %>%
+  select(Date, player, PTS) %>%
+  group_by(player) %>%  
+  mutate(cumulative_points = cumsum(PTS)) %>%
+  mutate(team = "team",
+         player2 = player) %>%
+  ungroup() %>%
+  select(-player)
+
+vcu %>%
+  group_by(player) %>%
+  mutate(cumulative_points = cumsum(PTS)) %>%
+  ungroup() %>%
+  mutate(player = factor(player, levels = season_average$player)) %>%
+  ggplot(aes(Date, cumulative_points)) +
+  geom_step(data = team, aes(group = player2), color = "grey", alpha = 0.15) +
+  geom_step(aes(group = player), color = "#FFB300", size = 1) +
+  facet_wrap(~player)  +
+  labs(title = "2017 VCU scoring during the season",
+       subtitle = "Team in grey, players in gold",
+       caption = "@awunderground",
+       x = NULL,
+       y = NULL) +
+  theme(panel.background = element_blank(),
+        strip.background = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank())
+
 ```
 
 ## Slope Chart
@@ -529,7 +565,7 @@ team <- vcu %>%
 vcu %>%
   mutate(player = factor(player, levels = season_average$player)) %>%
   ggplot(aes(Date, PTS)) +
-  geom_line(data = team, aes(group = player2), fill = "grey", alpha = 0.15) +
+  geom_line(data = team, aes(group = player2), color = "grey", alpha = 0.15) +
   geom_line(aes(group = player), color = "#FFB300", size = 1) +
   facet_wrap(~player)  +
   labs(title = "2017 VCU Scoring by Game",
@@ -681,3 +717,110 @@ ggplot(df, aes(monthweek, weekdayf, fill = VIX.Close)) +
        subtitle="Yahoo Closing Price", 
        fill="Close")
 ```
+
+## Line plots
+
+
+
+
+### geom_path
+
+`geom_line()` connects "points" as they appear from left to right along the x-axis. Use `geom_path()` to connect points in sequential order regardless of their order along the x-axis. 
+
+For example, this is necesary for creating Beveridge curves. The Beveridge curve, named for the economist William Beveridge, compares the unemployment rate with the job vacancy rate.  
+
+# seasonally-adjusted, quarterly vacancy rate
+# seasonally-adjusted, quarterly unemployment rate 
+
+
+# pulled from FRED on April 11, 2018. 
+
+```{r beveridge}
+library(tidyverse)
+
+beveridge<- read_csv(
+"quarter, vacanacy_rate, unempoyment_rate
+2001-01-01,3.53,4.23
+2001-04-01,3.33,4.40
+2001-07-01,3.06,4.83
+2001-10-01,2.56,5.50
+2002-01-01,2.63,5.70
+2002-04-01,2.60,5.83
+2002-07-01,2.53,5.73
+2002-10-01,2.43,5.86
+2003-01-01,2.53,5.86
+2003-04-01,2.46,6.13
+2003-07-01,2.40,6.13
+2003-10-01,2.40,5.83
+2004-01-01,2.53,5.70
+2004-04-01,2.63,5.60
+2004-07-01,2.80,5.43
+2004-10-01,2.63,5.43
+2005-01-01,2.76,5.30
+2005-04-01,2.93,5.10
+2005-07-01,3.03,4.96
+2005-10-01,3.00,4.96
+2006-01-01,3.10,4.73
+2006-04-01,3.16,4.63
+2006-07-01,3.13,4.63
+2006-10-01,3.10,4.43
+2007-01-01,3.23,4.50
+2007-04-01,3.26,4.50
+2007-07-01,3.16,4.66
+2007-10-01,2.93,4.80
+2008-01-01,2.86,5.00
+2008-04-01,2.80,5.33
+2008-07-01,2.53,6.00
+2008-10-01,2.20,6.86
+2009-01-01,1.96,8.26
+2009-04-01,1.80,9.30
+2009-07-01,1.76,9.63
+2009-10-01,1.80,9.93
+2010-01-01,1.96,9.83
+2010-04-01,2.20,9.63
+2010-07-01,2.16,9.46
+2010-10-01,2.20,9.50
+2011-01-01,2.26,9.03
+2011-04-01,2.36,9.06
+2011-07-01,2.50,9.00
+2011-10-01,2.43,8.63
+2012-01-01,2.70,8.26
+2012-04-01,2.70,8.20
+2012-07-01,2.66,8.03
+2012-10-01,2.60,7.80
+2013-01-01,2.76,7.73
+2013-04-01,2.80,7.53
+2013-07-01,2.80,7.23
+2013-10-01,2.76,6.93
+2014-01-01,2.90,6.66
+2014-04-01,3.23,6.23
+2014-07-01,3.26,6.10
+2014-10-01,3.30,5.70
+2015-01-01,3.50,5.56
+2015-04-01,3.66,5.40
+2015-07-01,3.73,5.10
+2015-10-01,3.60,5.00
+2016-01-01,3.86,4.93
+2016-04-01,3.83,4.86
+2016-07-01,3.83,4.93
+2016-10-01,3.63,4.73
+2017-01-01,3.66,4.66
+2017-04-01,3.90,4.33
+2017-07-01,4.06,4.30
+2017-10-01,3.86,4.10")
+
+beveridge %>%
+  mutate(period = case_when(
+    quarter < "2007-10-01" ~ "Pre-recession",
+    quarter <= "2009-07-01" ~ "Great Recession", 
+    TRUE ~ "Post-recession"
+    )) %>%
+  ggplot(aes(unempoyment_rate, vacanacy_rate, color = period)) +
+  geom_point() +
+  geom_path() +
+  labs(title = "The Beveridge curve",
+       subtitle = "Q1 2001 to Q4 2017",
+       x = "Seasonally-adjusted, quarterly unemployment rate",
+       y = "Seasonally-adjusted, quarterly vacancy rate")
+```
+
